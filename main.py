@@ -1,8 +1,15 @@
 import asyncio
-from .orchestrator.engine import WorkflowEngine
-from .orchestrator.consumer import KafkaOrchestrator
-from .handlers.example_handlers import ValidationHandler, ProcessingHandler, NotificationHandler, ErrorHandler
-from .workflows.example_workflow import create_transaction_workflow
+import os
+import sys
+
+# Add the project root directory to Python path
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, project_root)
+
+from src.orchestrator.engine import WorkflowEngine
+from src.orchestrator.consumer import KafkaOrchestrator
+from src.handlers.example_handlers import ValidationHandler, ProcessingHandler, NotificationHandler, ErrorHandler
+from src.workflows.example_workflow import create_transaction_workflow
 from config import config
 
 async def main():

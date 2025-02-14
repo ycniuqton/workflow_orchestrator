@@ -219,7 +219,7 @@ class KafkaListener(Listener):
         self.__topic = topic or self.settings.TOPIC
         config = {
             "bootstrap_servers": self.settings.KAFKA_SERVER,
-            "group_id": self.settings.CONSUMER_GROUP,
+            "group_id": self.settings.GROUP_ID,
             "enable_auto_commit": AUTO_COMMIT,
             "auto_offset_reset": AUTO_OFFSET_RESET,
         }

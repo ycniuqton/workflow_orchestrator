@@ -1,3 +1,5 @@
 confluent-kafka>=2.3.0
 pyyaml>=6.0.1
 marshmallow>=3.20.1
+kafka-python
+logging_context

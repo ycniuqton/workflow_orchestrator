@@ -1,5 +1,4 @@
 from ._base import KafkaListener, HandlerFactory, BaseHandler
-from config import BillingKafkaConfig
 from marshmallow import Schema, fields
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -21,15 +20,3 @@ class CustomeHandler(BaseHandler):
 
     def _handle(self, payload: Dict[str, Any]) -> None:
         print(payload)
-
-
-if __name__ == "__main__":
-    handlers = {
-        'CustomeHandler': CustomeHandler()
-    }
-    handler_factory = HandlerFactory(handlers=handlers)
-    listener = KafkaListener(
-        BillingKafkaConfig,
-        handler_factory=handler_factory,
-    )
-    listener.listen()

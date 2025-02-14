@@ -7,7 +7,7 @@ def main():
     
     # You can also access other config sections
     print(f"\nKafka Configuration:")
-    print(f"Bootstrap Servers: {config.KAFKA_CONFIG.BOOTSTRAP_SERVERS}")
+    print(f"Bootstrap Servers: {config.KAFKA_CONFIG.KAFKA_SERVER}")
     print(f"Topic: {config.KAFKA_CONFIG.TOPIC}")
 
 if __name__ == "__main__":
