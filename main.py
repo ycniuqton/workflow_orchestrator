@@ -1,9 +1,11 @@
-import asyncio
 import os
 import sys
+import asyncio
 import click
 import json
 import logging
+import uuid
+from datetime import datetime
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +16,7 @@ from src.orchestrator.consumer import KafkaOrchestrator
 from src.handlers.example_handlers import ValidationHandler, ProcessingHandler, NotificationHandler, ErrorHandler
 from src.workflows.example_workflow import create_transaction_workflow
 from src.utils.logging import setup_logging
+from libs.kafka_flow import KafkaProducer, KafkaMessage
 from config import config
 
 
@@ -77,25 +80,34 @@ def start_workflow(workflow_id: str, data: str, debug: bool):
         # Parse the JSON data or use empty dict if not provided
         workflow_data = json.loads(data) if data else {}
         
-        logger.info(f"Starting workflow: {workflow_id}")
+        # Generate trace_id at workflow start
+        trace_id = f"wf_{uuid.uuid4().hex[:16]}_{int(datetime.now().timestamp())}"
+        logger.info(f"Starting workflow {workflow_id} with trace_id: {trace_id}")
         logger.debug(f"Workflow data: {workflow_data}")
         
         async def execute():
-            orchestrator = setup_orchestrator()
-            orchestrator.publish_event(
-                config.ORCHESTRATOR_CONFIG.ORCHESTRATOR_TOPIC,
-                {
+            # Create Kafka producer just for publishing
+            producer = KafkaProducer(
+                bootstrap_servers=config.KAFKA_CONFIG.KAFKA_SERVER,
+                client_id=f"workflow-starter-{config.APP_CONFIG.APP_ID}"
+            )
+            
+            # Publish START_WORKFLOW event
+            producer.publish(KafkaMessage(
+                topic=config.ORCHESTRATOR_CONFIG.ORCHESTRATOR_TOPIC,
+                value={
                     'type': 'START_WORKFLOW',
                     'workflow_id': workflow_id,
-                    'data': workflow_data
+                    'data': workflow_data,
+                    'trace_id': trace_id
                 }
-            )
+            ))
+            
             # Give some time for the message to be published
             await asyncio.sleep(1)
-            orchestrator.stop()
+            logger.info("Workflow start message published successfully")
         
         asyncio.run(execute())
-        logger.info(f"Workflow {workflow_id} started successfully!")
         
     except json.JSONDecodeError:
         logger.error("Invalid JSON data format")
