@@ -88,6 +88,7 @@ class EventContext:
     event_id: str
     data: Dict[str, Any]
     metadata: Dict[str, Any]
+    trace_id: str  # Added trace_id for tracking workflow execution
     previous_event: Optional[str] = None
     previous_result: Optional[Dict[str, Any]] = None
     
@@ -97,10 +98,11 @@ class EventContext:
             "event_id": self.event_id,
             "data": self.data,
             "metadata": self.metadata,
+            "trace_id": self.trace_id,
             "previous_event": self.previous_event,
             "previous_result": self.previous_result
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'EventContext':
         return cls(**data)

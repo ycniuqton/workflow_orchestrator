@@ -1,5 +1,7 @@
 import asyncio
 from typing import Dict, Any, Optional, Tuple, Type
+import uuid
+from datetime import datetime
 from ..models.workflow import Workflow, EventStatus, EventContext, EventNode
 from ..handlers.base import BaseEventHandler
 from ..exceptions.workflow_exceptions import WorkflowNotFoundError, EventNotFoundError, HandlerNotFoundError
@@ -8,6 +10,10 @@ from config import config
 import logging
 
 logger = logging.getLogger('orchestrator.engine')
+
+def generate_trace_id() -> str:
+    """Generate a unique trace ID for workflow execution"""
+    return f"wf_{uuid.uuid4().hex[:16]}_{int(datetime.now().timestamp())}"
 
 class WorkflowEngine:
     """Engine for executing workflows"""
@@ -62,7 +68,9 @@ class WorkflowEngine:
                     'type': 'EVENT_COMPLETED',
                     'context': context.to_dict(),
                     'result': result,
-                    'success': success
+                    'success': success,
+                    'trace_id': context.trace_id,
+                    'timestamp': datetime.now().isoformat()
                 }
             ))
             
@@ -81,20 +89,22 @@ class WorkflowEngine:
                     'type': 'EVENT_COMPLETED',
                     'context': context.to_dict(),
                     'result': error_result,
-                    'success': False
+                    'success': False,
+                    'trace_id': context.trace_id,
+                    'timestamp': datetime.now().isoformat()
                 }
             ))
             
             logger.error(f"Error executing event {context.event_id}: {str(e)}", exc_info=True)
             raise
     
-    async def execute_workflow(self, workflow_id: str, initial_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_workflow(self, workflow_id: str, initial_data: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
         """Execute a workflow"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
             raise WorkflowNotFoundError(workflow_id)
         
-        logger.info(f"Starting workflow: {workflow_id}")
+        logger.info(f"Starting workflow: {workflow_id} with trace_id: {trace_id}")
         logger.debug(f"Initial data: {initial_data}")
         
         # Reset workflow state
@@ -110,7 +120,8 @@ class WorkflowEngine:
             workflow_id=workflow_id,
             event_id=current_event.event_id,
             data=initial_data,
-            metadata=workflow.metadata
+            metadata=workflow.metadata or {},
+            trace_id=trace_id
         )
         
         success, result = await self.execute_event(context)
@@ -121,13 +132,14 @@ class WorkflowEngine:
                 workflow_id=workflow_id,
                 event_id=current_event.next_on_failure,
                 data=initial_data,
-                metadata=workflow.metadata,
+                metadata=workflow.metadata or {},
                 previous_event=current_event.event_id,
-                previous_result=result
+                previous_result=result,
+                trace_id=trace_id
             )
             success, result = await self.execute_event(error_context)
         
-        logger.info(f"Workflow {workflow_id} completed")
+        logger.info(f"Workflow {workflow_id} completed with trace_id: {trace_id}")
         logger.debug(f"Final result: {result}")
         
         return result

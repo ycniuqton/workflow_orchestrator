@@ -3,6 +3,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
+import uuid
 
 from marshmallow import Schema, fields
 
@@ -13,6 +14,10 @@ from src.exceptions.workflow_exceptions import WorkflowError
 from config import config
 
 logger = logging.getLogger('orchestrator')
+
+def generate_trace_id() -> str:
+    """Generate a unique trace ID for workflow execution"""
+    return f"wf_{uuid.uuid4().hex[:16]}_{int(datetime.now().timestamp())}"
 
 class WorkflowMessageHandler(MessageHandler):
     def __init__(self, workflow_engine: WorkflowEngine, topic: str):
@@ -32,14 +37,18 @@ class WorkflowMessageHandler(MessageHandler):
             self.logger.info(f"Received message type: {msg_type}")
             self.logger.debug(f"Message payload: {payload}")
 
-            if msg_type == 'START_WORKFLOW':
+            if msg_type == 'START_WORKFLOW':        
                 workflow_id = payload['workflow_id']
                 initial_data = payload.get('data', {})
                 
                 self.logger.info(f"Starting workflow: {workflow_id}")
                 self.logger.debug(f"Initial data: {initial_data}")
                 
-                result = await self.workflow_engine.execute_workflow(workflow_id, initial_data)
+                # Generate trace_id at workflow start
+                trace_id = generate_trace_id()
+                self.logger.info(f"Starting workflow {workflow_id} with trace_id: {trace_id}")
+                
+                result = await self.workflow_engine.execute_workflow(workflow_id, initial_data, trace_id)
                 
                 self.logger.info(f"Workflow {workflow_id} completed successfully")
                 self.logger.debug(f"Workflow result: {result}")
@@ -64,7 +73,8 @@ class WorkflowMessageHandler(MessageHandler):
                                 data=context.data,
                                 metadata=workflow.metadata,
                                 previous_event=context.event_id,
-                                previous_result=payload.get('result')
+                                previous_result=payload.get('result'),
+                                trace_id=context.trace_id  # Pass the trace_id to maintain workflow tracing
                             )
                             await self.workflow_engine.execute_event(next_context)
                         else:
@@ -80,6 +90,7 @@ class WorkflowMessageHandler(MessageHandler):
                                     'workflow_id': context.workflow_id,
                                     'final_event': context.event_id,
                                     'result': payload.get('result'),
+                                    'trace_id': context.trace_id,
                                     'metadata': {
                                         'completed_at': datetime.now().isoformat(),
                                         'total_events': len(workflow.events)
