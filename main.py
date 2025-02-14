@@ -3,6 +3,7 @@ import os
 import sys
 import click
 import json
+import logging
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +13,7 @@ from src.orchestrator.engine import WorkflowEngine
 from src.orchestrator.consumer import KafkaOrchestrator
 from src.handlers.example_handlers import ValidationHandler, ProcessingHandler, NotificationHandler, ErrorHandler
 from src.workflows.example_workflow import create_transaction_workflow
+from src.utils.logging import setup_logging
 from config import config
 
 
@@ -41,16 +43,21 @@ def cli():
 
 
 @cli.command()
-def run_consumer():
+@click.option('--debug', is_flag=True, help='Enable debug logging')
+def run_consumer(debug):
     """Run the Kafka consumer to process workflow events"""
-    click.echo("Starting Kafka consumer...")
+    # Setup logging
+    log_level = logging.DEBUG if debug else logging.INFO
+    logger = setup_logging(log_level)
+    
+    logger.info("Starting Kafka consumer...")
     
     async def run():
         orchestrator = setup_orchestrator()
         try:
             await orchestrator.start()
         except KeyboardInterrupt:
-            click.echo("\nShutting down consumer...")
+            logger.info("Shutting down consumer...")
             orchestrator.stop()
     
     asyncio.run(run())
@@ -59,11 +66,19 @@ def run_consumer():
 @cli.command()
 @click.option('--workflow-id', '-w', default='transaction_processing', help='ID of the workflow to execute')
 @click.option('--data', '-d', help='JSON string of workflow data')
-def start_workflow(workflow_id: str, data: str):
+@click.option('--debug', is_flag=True, help='Enable debug logging')
+def start_workflow(workflow_id: str, data: str, debug: bool):
     """Start a new workflow with the given ID and data"""
+    # Setup logging
+    log_level = logging.DEBUG if debug else logging.INFO
+    logger = setup_logging(log_level)
+    
     try:
         # Parse the JSON data or use empty dict if not provided
         workflow_data = json.loads(data) if data else {}
+        
+        logger.info(f"Starting workflow: {workflow_id}")
+        logger.debug(f"Workflow data: {workflow_data}")
         
         async def execute():
             orchestrator = setup_orchestrator()
@@ -80,12 +95,14 @@ def start_workflow(workflow_id: str, data: str):
             orchestrator.stop()
         
         asyncio.run(execute())
-        click.echo(f"Workflow {workflow_id} started successfully!")
+        logger.info(f"Workflow {workflow_id} started successfully!")
         
     except json.JSONDecodeError:
-        click.echo("Error: Invalid JSON data format", err=True)
+        logger.error("Invalid JSON data format")
+        sys.exit(1)
     except Exception as e:
-        click.echo(f"Error starting workflow: {e}", err=True)
+        logger.error(f"Error starting workflow: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
