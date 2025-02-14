@@ -1,72 +1,31 @@
 import json
 import asyncio
 from typing import Dict, Any, Optional
-from confluent_kafka import Consumer, Producer, KafkaError
+from libs.kafka_factory import KafkaPublisher, KafkaListener, HandlerFactory, BaseHandler
 from .engine import WorkflowEngine
 from ..models.workflow import EventContext, Workflow
 from ..exceptions.workflow_exceptions import WorkflowError
+from config import config
 
-class KafkaOrchestrator:
-    def __init__(
-        self,
-        bootstrap_servers: str,
-        group_id: str,
-        workflow_engine: WorkflowEngine,
-        orchestrator_topic: str = "workflow_orchestrator"
-    ):
+class WorkflowMessageHandler(BaseHandler):
+    def __init__(self, workflow_engine: WorkflowEngine):
+        super().__init__()
         self.workflow_engine = workflow_engine
-        self.orchestrator_topic = orchestrator_topic
-        
-        # Configure Kafka consumer
-        self.consumer = Consumer({
-            'bootstrap.servers': bootstrap_servers,
-            'group.id': group_id,
-            'auto.offset.reset': 'earliest'
-        })
-        
-        # Configure Kafka producer for publishing events
-        self.producer = Producer({
-            'bootstrap.servers': bootstrap_servers
-        })
-        
-        self._running = False
     
-    def delivery_report(self, err, msg):
-        """Callback for producer delivery reports"""
-        if err is not None:
-            print(f'Message delivery failed: {err}')
-        else:
-            print(f'Message delivered to {msg.topic()} [{msg.partition()}]')
-    
-    async def publish_event(self, topic: str, key: str, value: Dict[str, Any]):
-        """Publish an event to a Kafka topic"""
-        try:
-            self.producer.produce(
-                topic,
-                key=key.encode('utf-8'),
-                value=json.dumps(value).encode('utf-8'),
-                callback=self.delivery_report
-            )
-            self.producer.poll(0)  # Trigger delivery reports
-        except Exception as e:
-            print(f"Error publishing message: {e}")
-            raise
-    
-    async def handle_workflow_message(self, message: Dict[str, Any]):
+    async def _handle(self, payload: Dict[str, Any]) -> None:
         """Handle incoming workflow messages"""
         try:
-            msg_type = message.get('type')
+            msg_type = payload.get('type')
             
             if msg_type == 'START_WORKFLOW':
                 # Start a new workflow
-                workflow_id = message['workflow_id']
-                initial_data = message.get('data', {})
+                workflow_id = payload['workflow_id']
+                initial_data = payload.get('data', {})
                 result = await self.workflow_engine.execute_workflow(workflow_id, initial_data)
                 
                 # Publish workflow completion event
                 await self.publish_event(
-                    self.orchestrator_topic,
-                    f"workflow_{workflow_id}",
+                    config.ORCHESTRATOR_CONFIG.ORCHESTRATOR_TOPIC,
                     {
                         'type': 'WORKFLOW_COMPLETED',
                         'workflow_id': workflow_id,
@@ -76,7 +35,7 @@ class KafkaOrchestrator:
             
             elif msg_type == 'EVENT_COMPLETED':
                 # Handle event completion and trigger next event if needed
-                context = EventContext.from_dict(message['context'])
+                context = EventContext.from_dict(payload['context'])
                 workflow = self.workflow_engine.get_workflow(context.workflow_id)
                 
                 if workflow:
@@ -90,7 +49,7 @@ class KafkaOrchestrator:
                                 data=context.data,
                                 metadata=workflow.metadata,
                                 previous_event=context.event_id,
-                                previous_result=message.get('result')
+                                previous_result=payload.get('result')
                             )
                             await self.workflow_engine.execute_event(next_context)
         
@@ -101,35 +60,42 @@ class KafkaOrchestrator:
         except Exception as e:
             # Handle unexpected errors
             print(f"Unexpected error: {e}")
+
+class KafkaOrchestrator:
+    def __init__(self, workflow_engine: WorkflowEngine):
+        self.workflow_engine = workflow_engine
+        
+        # Create message handler
+        handlers = {
+            'WorkflowMessageHandler': WorkflowMessageHandler(workflow_engine)
+        }
+        self.handler_factory = HandlerFactory(handlers=handlers)
+        
+        # Create Kafka listener
+        self.listener = KafkaListener(
+            settings=config.KAFKA_CONFIG,
+            handler_factory=self.handler_factory,
+            topic=config.ORCHESTRATOR_CONFIG.ORCHESTRATOR_TOPIC
+        )
+        
+        # Create Kafka publisher for events
+        self.publisher = KafkaPublisher(
+            servers=config.KAFKA_CONFIG.BOOTSTRAP_SERVERS,
+            topic=config.ORCHESTRATOR_CONFIG.ORCHESTRATOR_TOPIC
+        )
+    
+    async def publish_event(self, topic: str, value: Dict[str, Any]):
+        """Publish an event to a Kafka topic"""
+        try:
+            await self.publisher.publish(value)
+        except Exception as e:
+            print(f"Error publishing message: {e}")
+            raise
     
     async def start(self):
         """Start the Kafka orchestrator"""
-        self._running = True
-        self.consumer.subscribe([self.orchestrator_topic])
-        
-        try:
-            while self._running:
-                msg = self.consumer.poll(1.0)
-                
-                if msg is None:
-                    continue
-                if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
-                        continue
-                    print(f"Consumer error: {msg.error()}")
-                    continue
-                
-                try:
-                    value = json.loads(msg.value().decode('utf-8'))
-                    await self.handle_workflow_message(value)
-                except json.JSONDecodeError:
-                    print(f"Error decoding message: {msg.value()}")
-                except Exception as e:
-                    print(f"Error processing message: {e}")
-        
-        finally:
-            self.consumer.close()
+        await self.listener.listen()
     
     def stop(self):
         """Stop the Kafka orchestrator"""
-        self._running = False
+        self.listener.stopped = True

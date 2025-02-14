@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, Optional
-from ..models.workflow import EventContext, EventStatus
+from models.workflow import EventContext, EventStatus
 
 class BaseEventHandler(ABC):
     """Base class for all event handlers"""

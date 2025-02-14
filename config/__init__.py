@@ -46,6 +46,23 @@ class TelegramConfig(BaseConfig):
     def ALLOWED_GROUPS(self) -> List[int]:
         return self._config_data.get('ALLOWED_GROUPS', [])
 
+class OrchestratorConfig(BaseConfig):
+    @property
+    def ORCHESTRATOR_TOPIC(self) -> str:
+        return self._config_data.get('ORCHESTRATOR_TOPIC', 'workflow_orchestrator')
+    
+    @property
+    def GROUP_ID(self) -> str:
+        return self._config_data.get('GROUP_ID', 'workflow_orchestrator_group')
+    
+    @property
+    def AUTO_OFFSET_RESET(self) -> str:
+        return self._config_data.get('AUTO_OFFSET_RESET', 'earliest')
+    
+    @property
+    def ENABLE_AUTO_COMMIT(self) -> bool:
+        return self._config_data.get('ENABLE_AUTO_COMMIT', True)
+
 class Config:
     def __init__(self, yaml_path: str = None):
         if yaml_path is None:
@@ -57,6 +74,7 @@ class Config:
         self.APP_CONFIG = AppConfig(config_data.get('APP_CONFIG', {}))
         self.KAFKA_CONFIG = KafkaConfig(config_data.get('KAFKA_CONFIG', {}))
         self.TELEGRAM_CONFIG = TelegramConfig(config_data.get('TELEGRAM_CONFIG', {}))
+        self.ORCHESTRATOR_CONFIG = OrchestratorConfig(config_data.get('ORCHESTRATOR_CONFIG', {}))
 
 # Create a global config instance
 config = Config()

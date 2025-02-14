@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Any, Optional, Type
+from typing import Dict, Any, Optional, Type, Tuple
 from ..models.workflow import Workflow, EventNode, EventContext, EventStatus
 from ..handlers.base import BaseEventHandler
 from ..exceptions.workflow_exceptions import (

@@ -1,8 +1,9 @@
 import asyncio
-from orchestrator.engine import WorkflowEngine
-from orchestrator.consumer import KafkaOrchestrator
-from handlers.example_handlers import ValidationHandler, ProcessingHandler, NotificationHandler, ErrorHandler
-from workflows.example_workflow import create_transaction_workflow
+from .orchestrator.engine import WorkflowEngine
+from .orchestrator.consumer import KafkaOrchestrator
+from .handlers.example_handlers import ValidationHandler, ProcessingHandler, NotificationHandler, ErrorHandler
+from .workflows.example_workflow import create_transaction_workflow
+from config import config
 
 async def main():
     # Create workflow engine
@@ -18,17 +19,12 @@ async def main():
     workflow = create_transaction_workflow()
     workflow_engine.register_workflow(workflow)
     
-    # Create Kafka orchestrator
-    orchestrator = KafkaOrchestrator(
-        bootstrap_servers='localhost:9092',
-        group_id='workflow_orchestrator_group',
-        workflow_engine=workflow_engine
-    )
+    # Create Kafka orchestrator using configuration
+    orchestrator = KafkaOrchestrator(workflow_engine=workflow_engine)
     
     # Example: Trigger a workflow
     await orchestrator.publish_event(
-        'workflow_orchestrator',
-        'start_workflow_1',
+        config.ORCHESTRATOR_CONFIG.ORCHESTRATOR_TOPIC,
         {
             'type': 'START_WORKFLOW',
             'workflow_id': 'transaction_processing',
