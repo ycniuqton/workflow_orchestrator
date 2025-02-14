@@ -50,6 +50,11 @@ class WorkflowEngine:
         if not event:
             raise EventNotFoundError(context.workflow_id, context.event_id)
         
+        # Ensure trace_id exists
+        if not context.trace_id:
+            context.trace_id = generate_trace_id()
+            logger.warning(f"No trace_id provided for event {context.event_id}, generated new one: {context.trace_id}")
+        
         handler_class = self._handlers.get(event.handler)
         if not handler_class:
             raise HandlerNotFoundError(f"Handler {event.handler} not found")
@@ -74,7 +79,7 @@ class WorkflowEngine:
                 }
             ))
             
-            logger.info(f"Event {context.event_id} completed with status: {'success' if success else 'failed'}")
+            logger.info(f"Event {context.event_id} completed with status: {'success' if success else 'failed'}, trace_id: {context.trace_id}")
             logger.debug(f"Event result: {result}")
             
             return success, result

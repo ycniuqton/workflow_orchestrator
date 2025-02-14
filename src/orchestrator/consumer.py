@@ -40,30 +40,57 @@ class WorkflowMessageHandler(MessageHandler):
             if msg_type == 'START_WORKFLOW':        
                 workflow_id = payload['workflow_id']
                 initial_data = payload.get('data', {})
+                trace_id = payload.get('trace_id')
                 
-                self.logger.info(f"Starting workflow: {workflow_id}")
-                self.logger.debug(f"Initial data: {initial_data}")
+                workflow = self.workflow_engine.get_workflow(workflow_id)
+                if not workflow:
+                    self.logger.error(f"Workflow {workflow_id} not found")
+                    return
+
+                # If no trace_id provided, generate one
+                if not trace_id:
+                    trace_id = generate_trace_id()
+                    self.logger.info(f"No trace_id provided, generated new one: {trace_id}")
+                else:
+                    self.logger.info(f"Using provided trace_id: {trace_id}")
+
+                # Get the first event
+                first_event = workflow.get_first_event()
+                if not first_event:
+                    self.logger.error(f"No first event found for workflow {workflow_id}")
+                    return
+
+                # Create initial context with trace_id
+                context = EventContext(
+                    workflow_id=workflow_id,
+                    event_id=first_event.event_id,
+                    data=initial_data,
+                    metadata=workflow.metadata or {},
+                    trace_id=trace_id
+                )
                 
-                # Generate trace_id at workflow start
-                trace_id = generate_trace_id()
-                self.logger.info(f"Starting workflow {workflow_id} with trace_id: {trace_id}")
-                
-                result = await self.workflow_engine.execute_workflow(workflow_id, initial_data, trace_id)
-                
-                self.logger.info(f"Workflow {workflow_id} completed successfully")
-                self.logger.debug(f"Workflow result: {result}")
+                await self.workflow_engine.execute_event(context)
 
             elif msg_type == 'EVENT_COMPLETED':
-                context = EventContext.from_dict(payload['context'])
+                context = EventContext.from_dict(payload.get('context', {}))
                 workflow = self.workflow_engine.get_workflow(context.workflow_id)
                 
-                self.logger.info(f"Event completed: {context.event_id} in workflow {context.workflow_id}")
+                if not context.trace_id:
+                    self.logger.warning(f"No trace_id in EVENT_COMPLETED for workflow {context.workflow_id}, event {context.event_id}")
+                    context.trace_id = generate_trace_id()
+                    self.logger.info(f"Generated new trace_id: {context.trace_id}")
+
+                self.logger.info(f"Event completed: {context.event_id} in workflow {context.workflow_id} with trace_id: {context.trace_id}")
                 self.logger.debug(f"Event context: {context}")
 
                 if workflow:
                     event = workflow.events.get(context.event_id)
                     if event:
-                        next_event_id = event.next_on_success
+                        if payload.get('success', False):
+                            next_event_id = event.next_on_success
+                        else:
+                            next_event_id = event.next_on_failure
+                            
                         if next_event_id:
                             self.logger.info(f"Triggering next event: {next_event_id}")
                             
@@ -74,7 +101,7 @@ class WorkflowMessageHandler(MessageHandler):
                                 metadata=workflow.metadata,
                                 previous_event=context.event_id,
                                 previous_result=payload.get('result'),
-                                trace_id=context.trace_id  # Pass the trace_id to maintain workflow tracing
+                                trace_id=context.trace_id  # Forward the trace_id to next event
                             )
                             await self.workflow_engine.execute_event(next_context)
                         else:
@@ -82,7 +109,7 @@ class WorkflowMessageHandler(MessageHandler):
                             self.logger.info(f"Workflow {context.workflow_id} completed successfully - all events processed")
                             self.logger.debug(f"Final event result: {payload.get('result')}")
                             
-                            # Publish workflow completion event
+                            # Publish workflow completion event with same trace_id
                             self.publisher.publish(KafkaMessage(
                                 topic=self._topic,
                                 value={
