@@ -49,7 +49,7 @@ class Workflow:
     description: str
     start_event: str  # event_id of the first event
     events: Dict[str, EventNode]  # Map of event_id to EventNode
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = None
     status: EventStatus = EventStatus.PENDING
     current_event: Optional[str] = None
     
@@ -59,21 +59,28 @@ class Workflow:
             "name": self.name,
             "description": self.description,
             "start_event": self.start_event,
-            "events": {k: v.to_dict() for k, v in self.events.items()},
-            "metadata": self.metadata,
+            "events": {
+                event_id: event.to_dict()
+                for event_id, event in self.events.items()
+            },
+            "metadata": self.metadata or {},
             "status": self.status.value,
             "current_event": self.current_event
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Workflow':
         data = data.copy()
         data['events'] = {
-            k: EventNode.from_dict(v) if isinstance(v, dict) else v 
-            for k, v in data.get('events', {}).items()
+            event_id: EventNode.from_dict(event_data)
+            for event_id, event_data in data.get('events', {}).items()
         }
         data['status'] = EventStatus(data.get('status', 'PENDING'))
         return cls(**data)
+    
+    def get_first_event(self) -> Optional[EventNode]:
+        """Get the first event in the workflow"""
+        return self.events.get(self.start_event)
 
 @dataclass
 class EventContext:

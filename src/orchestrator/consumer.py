@@ -2,6 +2,7 @@ import json
 import asyncio
 import logging
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 from marshmallow import Schema, fields
 
@@ -70,6 +71,21 @@ class WorkflowMessageHandler(MessageHandler):
                             # This was the last event in the workflow
                             self.logger.info(f"Workflow {context.workflow_id} completed successfully - all events processed")
                             self.logger.debug(f"Final event result: {payload.get('result')}")
+                            
+                            # Publish workflow completion event
+                            self.publisher.publish(KafkaMessage(
+                                topic=self._topic,
+                                value={
+                                    'type': 'WORKFLOW_COMPLETED',
+                                    'workflow_id': context.workflow_id,
+                                    'final_event': context.event_id,
+                                    'result': payload.get('result'),
+                                    'metadata': {
+                                        'completed_at': datetime.now().isoformat(),
+                                        'total_events': len(workflow.events)
+                                    }
+                                }
+                            ))
                     else:
                         self.logger.warning(f"Event {context.event_id} not found in workflow {context.workflow_id}")
                 else:
@@ -86,7 +102,7 @@ class WorkflowMessageHandler(MessageHandler):
 
         except WorkflowError as e:
             self.logger.error(f"Workflow error: {str(e)}", exc_info=True)
-        except Exception as e:
+        except Exception as e:      
             self.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
 
 
