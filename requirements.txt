@@ -3,3 +3,4 @@ pyyaml>=6.0.1
 marshmallow>=3.20.1
 kafka-python
 logging_context
+click>=8.1.7
