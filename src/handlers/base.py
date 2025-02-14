@@ -5,11 +5,11 @@ from ..models.workflow import EventContext, EventStatus
 class BaseEventHandler(ABC):
     """Base class for all event handlers"""
     
-    def __init__(self):
-        self.context: Optional[EventContext] = None
+    def __init__(self, context: Optional[EventContext] = None):
+        self.context: Optional[EventContext] = context
     
     @abstractmethod
-    async def handle(self, context: EventContext) -> Tuple[bool, Dict[str, Any]]:
+    async def handle(self, context: EventContext = None) -> Tuple[bool, Dict[str, Any]]:
         """
         Handle the event
         
@@ -29,8 +29,10 @@ class BaseEventHandler(ABC):
             return True
         return all(field in data for field in required_fields)
     
-    def get_previous_result(self) -> Optional[Dict[str, Any]]:
+    def get_previous_result(self, context: EventContext = None) -> Optional[Dict[str, Any]]:
         """Get the result from the previous event if it exists"""
-        if self.context and self.context.previous_result:
-            return self.context.previous_result
+        if not context:
+            context = self.context
+        if context and context.previous_result:
+            return context.previous_result
         return None

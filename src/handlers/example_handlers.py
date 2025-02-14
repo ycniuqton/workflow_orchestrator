@@ -3,7 +3,9 @@ from .base import BaseEventHandler
 from ..models.workflow import EventContext
 
 class ValidationHandler(BaseEventHandler):
-    async def handle(self, context: EventContext) -> Tuple[bool, Dict[str, Any]]:
+    async def handle(self, context: EventContext = None) -> Tuple[bool, Dict[str, Any]]:
+        if not context:
+            context = self.context
         """Validate input data"""
         data = context.data
         required_fields = ['user_id', 'amount']
@@ -24,9 +26,11 @@ class ValidationHandler(BaseEventHandler):
         }
 
 class ProcessingHandler(BaseEventHandler):
-    async def handle(self, context: EventContext) -> Tuple[bool, Dict[str, Any]]:
+    async def handle(self, context: EventContext = None) -> Tuple[bool, Dict[str, Any]]:
+        if not context:
+            context = self.context
         """Process the validated data"""
-        previous_result = self.get_previous_result()
+        previous_result = self.get_previous_result(context)
         if not previous_result or 'validated_data' not in previous_result:
             return False, {"error": "No validated data found"}
         
@@ -40,9 +44,11 @@ class ProcessingHandler(BaseEventHandler):
         }
 
 class NotificationHandler(BaseEventHandler):
-    async def handle(self, context: EventContext) -> Tuple[bool, Dict[str, Any]]:
+    async def handle(self, context: EventContext = None) -> Tuple[bool, Dict[str, Any]]:
+        if not context:
+            context = self.context
         """Send notification about the processed transaction"""
-        previous_result = self.get_previous_result()
+        previous_result = self.get_previous_result(context)
         if not previous_result:
             return False, {"error": "No processing result found"}
         
@@ -58,9 +64,11 @@ class NotificationHandler(BaseEventHandler):
         }
 
 class ErrorHandler(BaseEventHandler):
-    async def handle(self, context: EventContext) -> Tuple[bool, Dict[str, Any]]:
+    async def handle(self, context: EventContext = None) -> Tuple[bool, Dict[str, Any]]:
+        if not context:
+            context = self.context
         """Handle errors from previous events"""
-        previous_result = self.get_previous_result()
+        previous_result = self.get_previous_result(context)
         error_message = previous_result.get('error', 'Unknown error') if previous_result else 'Unknown error'
         
         # Simulate error handling

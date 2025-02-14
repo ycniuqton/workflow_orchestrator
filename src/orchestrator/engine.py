@@ -42,11 +42,11 @@ class WorkflowEngine:
         if not handler_class:
             raise HandlerNotFoundError(f"Handler {event.handler} not found")
             
-        handler = handler_class()
+        handler = handler_class(context)
         event.status = EventStatus.RUNNING
         
         try:
-            success, result = await handler.handle(context)
+            success, result = await handler.handle()
             event.status = EventStatus.SUCCESS if success else EventStatus.FAILED
             return success, result
         except Exception as e:
