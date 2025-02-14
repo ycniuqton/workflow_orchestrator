@@ -68,7 +68,7 @@ class KafkaPublisher:
         self.__delay = RETRY_DELAY
 
     def publish(
-            self, event_type: str, payload: Dict[str, Any], key: Optional[str] = None,
+            self, event_type: str = None, payload: Dict[str, Any] = {}, key: Optional[str] = None,
             issued_at: Optional[datetime] = None
     ):
         retry_count = 0
@@ -76,11 +76,14 @@ class KafkaPublisher:
             issued_at = datetime.now(tz=timezone.utc)
 
         while True:
-            message = dict(
-                event_type=event_type or "",
-                payload=payload or {},
-                issued_at=issued_at,
-            )
+            if event_type:
+                message = dict(
+                    event_type=event_type or "",
+                    payload=payload or {},
+                    issued_at=issued_at,
+                )
+            else:
+                message = payload
             if not key:
                 key_formated = key
             else:

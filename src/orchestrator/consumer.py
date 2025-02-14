@@ -99,7 +99,7 @@ class KafkaOrchestrator:
     async def publish_event(self, topic: str, value: Dict[str, Any]):
         """Publish an event to a Kafka topic"""
         try:
-            await self.publisher.publish(value)
+            self.publisher.publish(value)
         except Exception as e:
             print(f"Error publishing message: {e}")
             raise
