@@ -25,7 +25,7 @@ class EventNode:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "event_id": self.event_id,
-            "topic": self.topic,
+            # "topic": self.topic,
             "handler": self.handler,
             "next_on_success": self.next_on_success,
             "next_on_failure": self.next_on_failure,
